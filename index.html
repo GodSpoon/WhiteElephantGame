@@ -65,12 +65,21 @@
     </div>
 
     <script type="text/babel">
-        // Import React hooks and Lucide icons
+        // Import React hooks
         const { useState, useEffect, useRef } = React;
-        const { 
-            Plus, Trash2, Gift, Users, Settings, Volume2, VolumeX, 
-            ArrowRight, ChevronDown, ChevronUp, X 
-        } = lucideReact;
+        
+        // Import Lucide icons individually from the global lucideReact object
+        const Plus = lucideReact.Plus;
+        const Trash2 = lucideReact.Trash2;
+        const Gift = lucideReact.Gift;
+        const Users = lucideReact.Users;
+        const Settings = lucideReact.Settings;
+        const Volume2 = lucideReact.Volume2;
+        const VolumeX = lucideReact.VolumeX;
+        const ArrowRight = lucideReact.ArrowRight;
+        const ChevronDown = lucideReact.ChevronDown;
+        const ChevronUp = lucideReact.ChevronUp;
+        const X = lucideReact.X;
 
         const WhiteElephantWheel = () => {
           const soundOptions = [

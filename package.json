@@ -1,0 +1,33 @@
+{
+  "name": "white-elephant-game",
+  "version": "1.0.0",
+  "description": "A fun White Elephant gift exchange game with challenge wheel",
+  "main": "index.html",
+  "scripts": {
+    "build": "echo 'Build complete'",
+    "dev": "python -m http.server 8000",
+    "serve": "python -m http.server 8000"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/USER/WhiteElephantGame.git"
+  },
+  "keywords": [
+    "game",
+    "white-elephant",
+    "gift-exchange",
+    "react",
+    "javascript"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "homepage": "https://USER.github.io/WhiteElephantGame/",
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.23.0",
+    "@babel/preset-react": "^7.23.0"
+  }
+}

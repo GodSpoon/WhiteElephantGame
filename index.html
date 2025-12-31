@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎁 White Elephant Challenge Wheel</title>
+    <meta name="description" content="A fun interactive White Elephant gift exchange game with challenge wheel">
+    
+    <!-- React and React DOM from CDN -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel for JSX transformation -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Lucide React Icons -->
+    <script src="https://unpkg.com/lucide-react@latest/dist/umd/lucide-react.js"></script>
+    
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: system-ui, -apple-system, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        
+        #root {
+            width: 100%;
+            min-height: 100vh;
+        }
+        
+        /* Loading animation */
+        .loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-size: 24px;
+            color: white;
+            font-weight: bold;
+        }
+        
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 16px;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div id="root">
+        <div class="loading">
+            <div class="spinner"></div>
+            Loading White Elephant Game...
+        </div>
+    </div>
+
+    <script type="text/babel">
+        // Import the WhiteElephantWheel component
+        const { useState, useEffect, useRef } = React;
+        const { 
+            Plus, Trash2, Gift, Users, Settings, Volume2, VolumeX, 
+            ArrowRight, ChevronDown, ChevronUp, X 
+        } = lucideReact;
+        
+        // Load the component from the external JSX file
+        fetch('./white-elephant-wheel.jsx')
+            .then(response => response.text())
+            .then(jsxCode => {
+                // Remove the import statement and export statement from the JSX
+                const cleanedCode = jsxCode
+                    .replace(/^import.*from.*;$/gm, '')
+                    .replace(/^export default.*;$/gm, '')
+                    .trim();
+                
+                // Create a script element and add the cleaned JSX code
+                const script = document.createElement('script');
+                script.type = 'text/babel';
+                script.textContent = cleanedCode + `
+                
+                // Render the component
+                ReactDOM.render(React.createElement(WhiteElephantWheel), document.getElementById('root'));
+                `;
+                
+                document.body.appendChild(script);
+            })
+            .catch(error => {
+                console.error('Error loading component:', error);
+                document.getElementById('root').innerHTML = 
+                    '<div style="color: red; text-align: center; padding: 50px;">Error loading game. Please refresh the page.</div>';
+            });
+    </script>
+</body>
+</html>

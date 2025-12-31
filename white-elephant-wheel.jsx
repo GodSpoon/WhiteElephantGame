@@ -62,6 +62,8 @@ const WhiteElephantWheel = () => {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [confirmAction, setConfirmAction] = useState(null);
   const [showRules, setShowRules] = useState(false);
+  const [showStealValidation, setShowStealValidation] = useState(false);
+  const [pendingStealInfo, setPendingStealInfo] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [newChallenge, setNewChallenge] = useState({ text: '', color: '#FF6B6B', font: 'Comic Sans MS', sound: 'cheer' });
@@ -427,7 +429,7 @@ const WhiteElephantWheel = () => {
     setTimeout(() => nextTurn(), 500);
   };
 
-  const stealGift = (fromPlayerIndex, fromGiftIndex) => {
+  const initiateSteal = (fromPlayerIndex, fromGiftIndex) => {
     const fromPlayer = players[fromPlayerIndex];
     
     if (!fromPlayer || !fromPlayer.gifts || !fromPlayer.gifts[fromGiftIndex]) {
@@ -436,10 +438,30 @@ const WhiteElephantWheel = () => {
       return;
     }
     
+    const giftToSteal = fromPlayer.gifts[fromGiftIndex];
+    setPendingStealInfo({
+      fromPlayerIndex,
+      fromGiftIndex,
+      gift: giftToSteal,
+      fromPlayerName: fromPlayer.name
+    });
+    
+    setShowGiftModal(false);
+    setShowStealValidation(true);
+  };
+  
+  const completeSteal = () => {
+    if (!pendingStealInfo) return;
+    
+    const { fromPlayerIndex, fromGiftIndex, gift } = pendingStealInfo;
+    
     const stolenGift = {
-      ...fromPlayer.gifts[fromGiftIndex], 
+      ...gift,
       messedUp: false,
-      previousOwnerIndex: fromPlayerIndex // Track who we stole from
+      previousOwnerIndex: fromPlayerIndex,
+      originalOwnerIndex: gift.originalOwnerIndex || fromPlayerIndex,
+      stolenFromIndex: fromPlayerIndex,
+      validationNeeded: true // Flag to show this gift needs validation
     };
     
     const updatedPlayers = players.map((p, pIdx) => {
@@ -459,11 +481,47 @@ const WhiteElephantWheel = () => {
     });
     
     setPlayers(updatedPlayers);
-    setShowGiftModal(false);
-    setPendingGiftNumber('');
-    setSelectedChallenge(null);
-    setTurnAction(null);
+    setShowStealValidation(false);
+    setPendingStealInfo(null);
     playSound('steal');
+    
+    // Show notification about challenge requirement
+    const notification = document.createElement('div');
+    notification.style.position = 'fixed';
+    notification.style.top = '50%';
+    notification.style.left = '50%';
+    notification.style.transform = 'translate(-50%, -50%)';
+    notification.style.background = 'linear-gradient(135deg, #4ECDC4, #44A08D)';
+    notification.style.color = 'white';
+    notification.style.padding = '30px 50px';
+    notification.style.borderRadius = '20px';
+    notification.style.fontSize = '20px';
+    notification.style.fontWeight = '800';
+    notification.style.zIndex = '10001';
+    notification.style.boxShadow = '0 20px 60px rgba(0,0,0,0.5)';
+    notification.style.textAlign = 'center';
+    notification.style.maxWidth = '80vw';
+    notification.innerHTML = `🏴‍☠️ ${currentPlayer.name} stole Gift #${stolenGift.giftNumber}!<br/><br/>⚠️ You must now perform the challenge:<br/>"${stolenGift.challenge}"<br/><br/>If you mess up, the gift returns to ${pendingStealInfo.fromPlayerName}!`;
+    
+    document.body.appendChild(notification);
+    
+    notification.animate([
+      { opacity: 0, transform: 'translate(-50%, -50%) scale(0.8)' },
+      { opacity: 1, transform: 'translate(-50%, -50%) scale(1)' }
+    ], {
+      duration: 300,
+      easing: 'ease-out'
+    });
+    
+    setTimeout(() => {
+      notification.animate([
+        { opacity: 1, transform: 'translate(-50%, -50%) scale(1)' },
+        { opacity: 0, transform: 'translate(-50%, -50%) scale(0.8)' }
+      ], {
+        duration: 300,
+        easing: 'ease-in'
+      }).onfinish = () => notification.remove();
+    }, 4000);
     
     // Auto-advance turn after successful steal
     setTimeout(() => nextTurn(), 500);
@@ -479,17 +537,96 @@ const WhiteElephantWheel = () => {
     const player = players[playerIndex];
     const gift = player.gifts[giftIndex];
     
-    if (!confirm(`Mark ${player.name}'s Gift #${gift.giftNumber} as messed up?\n\nThis will make it stealable by other players!`)) {
+    let confirmMessage = `Mark ${player.name}'s Gift #${gift.giftNumber} as messed up?\n\nThis will make it stealable by other players!`;
+    
+    // If this is a stolen gift that was being validated, it should return to original owner
+    if (gift.validationNeeded && gift.originalOwnerIndex !== undefined) {
+      const originalOwner = players[gift.originalOwnerIndex];
+      confirmMessage = `${player.name} failed the stolen challenge!\n\nGift #${gift.giftNumber} will return to ${originalOwner ? originalOwner.name : 'original owner'}.`;
+    }
+    
+    if (!confirm(confirmMessage)) {
       return;
     }
     
+    // Handle stolen gift validation failure - return to original owner
+    if (gift.validationNeeded && gift.originalOwnerIndex !== undefined && gift.originalOwnerIndex !== playerIndex) {
+      const returnedGift = {
+        ...gift,
+        messedUp: false,
+        validationNeeded: false,
+        previousOwnerIndex: undefined,
+        stolenFromIndex: undefined
+      };
+      
+      const updatedPlayers = players.map((p, pIdx) => {
+        if (pIdx === gift.originalOwnerIndex) {
+          return {
+            ...p,
+            gifts: [...(p.gifts || []), returnedGift]
+          };
+        }
+        if (pIdx === playerIndex) {
+          return {
+            ...p,
+            gifts: p.gifts.filter((_, gIdx) => gIdx !== giftIndex)
+          };
+        }
+        return p;
+      });
+      
+      setPlayers(updatedPlayers);
+      playSound('fail');
+      
+      // Show return notification
+      const notification = document.createElement('div');
+      notification.style.position = 'fixed';
+      notification.style.top = '50%';
+      notification.style.left = '50%';
+      notification.style.transform = 'translate(-50%, -50%)';
+      notification.style.background = 'linear-gradient(135deg, #FFC107, #FF8F00)';
+      notification.style.color = 'white';
+      notification.style.padding = '30px 50px';
+      notification.style.borderRadius = '20px';
+      notification.style.fontSize = '22px';
+      notification.style.fontWeight = '800';
+      notification.style.zIndex = '10001';
+      notification.style.boxShadow = '0 20px 60px rgba(0,0,0,0.5)';
+      notification.style.textAlign = 'center';
+      const originalOwner = players[gift.originalOwnerIndex];
+      notification.innerHTML = `↩️ Gift #${gift.giftNumber} returned to ${originalOwner ? originalOwner.name : 'original owner'}!<br/><br/>💪 Challenge failed by ${player.name}`;
+      
+      document.body.appendChild(notification);
+      
+      notification.animate([
+        { opacity: 0, transform: 'translate(-50%, -50%) scale(0.8)' },
+        { opacity: 1, transform: 'translate(-50%, -50%) scale(1)' }
+      ], {
+        duration: 300,
+        easing: 'ease-out'
+      });
+      
+      setTimeout(() => {
+        notification.animate([
+          { opacity: 1, transform: 'translate(-50%, -50%) scale(1)' },
+          { opacity: 0, transform: 'translate(-50%, -50%) scale(0.8)' }
+        ], {
+          duration: 300,
+          easing: 'ease-in'
+        }).onfinish = () => notification.remove();
+      }, 3000);
+      
+      return;
+    }
+    
+    // Regular mess up - make gift stealable
     const updatedPlayers = players.map((p, pIdx) => {
       if (pIdx !== playerIndex) return p;
       return {
         ...p,
         gifts: p.gifts.map((g, gIdx) => {
           if (gIdx !== giftIndex) return g;
-          return { ...g, messedUp: true };
+          return { ...g, messedUp: true, validationNeeded: false };
         })
       };
     });
@@ -563,6 +700,9 @@ const WhiteElephantWheel = () => {
     setPendingGiftNumber('');
     setTurnAction(null);
     setShowTurnChoice(false);
+    setShowGiftModal(false);
+    setShowStealValidation(false);
+    setPendingStealInfo(null);
   };
 
   const addPlayer = () => {
@@ -1281,7 +1421,7 @@ const WhiteElephantWheel = () => {
                         </div>
                         
                         <button
-                          onClick={() => stealGift(gift.playerIndex, gift.giftIndex)}
+                          onClick={() => initiateSteal(gift.playerIndex, gift.giftIndex)}
                           style={{
                             width: '100%',
                             padding: '12px',
@@ -1303,6 +1443,130 @@ const WhiteElephantWheel = () => {
                 )}
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Steal Validation Modal */}
+      {showStealValidation && pendingStealInfo && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.90)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1002,
+          padding: '20px',
+          backdropFilter: 'blur(10px)'
+        }}>
+          <div style={{
+            background: 'white',
+            borderRadius: '24px',
+            padding: '40px',
+            maxWidth: '650px',
+            width: '100%',
+            boxShadow: '0 30px 80px rgba(0,0,0,0.6)',
+            animation: 'slideIn 0.3s ease-out',
+            textAlign: 'center'
+          }}>
+            <div style={{
+              fontSize: '48px',
+              marginBottom: '20px'
+            }}>
+              🏴‍☠️
+            </div>
+            
+            <h2 style={{
+              fontSize: '28px',
+              fontWeight: 800,
+              marginBottom: '16px',
+              color: '#FF6B6B'
+            }}>
+              Prepare for Challenge!
+            </h2>
+            
+            <div style={{
+              background: '#FFF3CD',
+              border: '3px solid #FFC107',
+              borderRadius: '16px',
+              padding: '24px',
+              marginBottom: '24px'
+            }}>
+              <div style={{ fontSize: '18px', fontWeight: 700, marginBottom: '12px' }}>
+                You're about to steal:
+              </div>
+              <div style={{ fontSize: '24px', fontWeight: 800, color: '#FF6B6B', marginBottom: '16px' }}>
+                {pendingStealInfo.fromPlayerName}'s Gift #{pendingStealInfo.gift.giftNumber}
+              </div>
+              <div style={{
+                background: 'white',
+                padding: '16px',
+                borderRadius: '12px',
+                border: '2px solid #FF6B6B'
+              }}>
+                <div style={{ fontSize: '16px', fontWeight: 700, marginBottom: '8px' }}>
+                  🎭 Challenge you must perform:
+                </div>
+                <div style={{ fontSize: '18px', fontWeight: 600, lineHeight: '1.4' }}>
+                  "{pendingStealInfo.gift.challenge}"
+                </div>
+              </div>
+            </div>
+            
+            <div style={{
+              background: '#FFE6E6',
+              border: '2px solid #FF6B6B',
+              borderRadius: '12px',
+              padding: '16px',
+              marginBottom: '32px',
+              fontSize: '16px',
+              fontWeight: 600,
+              color: '#D32F2F'
+            }}>
+              ⚠️ <strong>Warning:</strong> If you mess up this challenge, the gift will automatically return to {pendingStealInfo.fromPlayerName}!
+            </div>
+            
+            <div style={{ display: 'flex', gap: '16px', justifyContent: 'center' }}>
+              <button
+                onClick={() => {
+                  setShowStealValidation(false);
+                  setPendingStealInfo(null);
+                }}
+                style={{
+                  padding: '16px 32px',
+                  background: '#ddd',
+                  color: '#666',
+                  border: 'none',
+                  borderRadius: '12px',
+                  cursor: 'pointer',
+                  fontSize: '18px',
+                  fontWeight: 700
+                }}
+              >
+                🚫 Cancel
+              </button>
+              
+              <button
+                onClick={completeSteal}
+                style={{
+                  padding: '16px 32px',
+                  background: 'linear-gradient(135deg, #FF6B6B, #FF8E53)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '12px',
+                  cursor: 'pointer',
+                  fontSize: '18px',
+                  fontWeight: 700,
+                  boxShadow: '0 6px 20px rgba(255,107,107,0.4)'
+                }}
+              >
+                🏴‍☠️ I Accept the Challenge!
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -1595,8 +1859,18 @@ const WhiteElephantWheel = () => {
                       <div
                         key={gIndex}
                         style={{
-                          background: gift.messedUp ? '#FFCCCB' : gift.challengeColor + '33',
-                          border: `2px solid ${gift.messedUp ? '#FF6B6B' : gift.challengeColor}`,
+                          background: gift.messedUp 
+                            ? '#FFCCCB' 
+                            : gift.validationNeeded 
+                              ? '#FFF3CD' 
+                              : gift.challengeColor + '33',
+                          border: `2px solid ${
+                            gift.messedUp 
+                              ? '#FF6B6B' 
+                              : gift.validationNeeded 
+                                ? '#FFC107' 
+                                : gift.challengeColor
+                          }`,
                           borderRadius: '12px',
                           padding: '14px'
                         }}
@@ -1617,6 +1891,19 @@ const WhiteElephantWheel = () => {
                                 fontWeight: 700
                               }}>
                                 ❌ MESSED UP
+                              </span>
+                            )}
+                            {gift.validationNeeded && !gift.messedUp && (
+                              <span style={{ 
+                                background: '#FFC107', 
+                                color: 'white', 
+                                padding: '4px 10px', 
+                                borderRadius: '12px',
+                                fontSize: '11px',
+                                fontWeight: 700,
+                                animation: 'pulse 2s infinite'
+                              }}>
+                                ⚠️ STOLEN - PROVE IT!
                               </span>
                             )}
                           </div>
@@ -1646,6 +1933,24 @@ const WhiteElephantWheel = () => {
                         }}>
                           🎭 {gift.challenge}
                         </div>
+                        
+                        {gift.validationNeeded && gift.stolenFromIndex !== undefined && (
+                          <div style={{
+                            background: '#FFF3CD',
+                            border: '2px solid #FFC107',
+                            borderRadius: '8px',
+                            padding: '8px 12px',
+                            marginBottom: '10px',
+                            fontSize: '13px',
+                            fontWeight: 600,
+                            color: '#856404'
+                          }}>
+                            ⚠️ Stolen from {players[gift.stolenFromIndex]?.name || 'another player'}<br/>
+                            {gift.originalOwnerIndex !== gift.stolenFromIndex && gift.originalOwnerIndex !== undefined && 
+                              `Originally: ${players[gift.originalOwnerIndex]?.name || 'unknown'}`
+                            }
+                          </div>
+                        )}
 
                         {!gift.messedUp && (
                           <button
@@ -1653,17 +1958,23 @@ const WhiteElephantWheel = () => {
                             style={{
                               width: '100%',
                               padding: '10px',
-                              background: 'linear-gradient(135deg, #FF6B6B, #FF8E53)',
+                              background: gift.validationNeeded 
+                                ? 'linear-gradient(135deg, #FFC107, #FF8F00)' 
+                                : 'linear-gradient(135deg, #FF6B6B, #FF8E53)',
                               color: 'white',
                               border: 'none',
                               borderRadius: '10px',
                               cursor: 'pointer',
                               fontWeight: 700,
                               fontSize: '14px',
-                              boxShadow: '0 4px 12px rgba(255,107,107,0.3)'
+                              boxShadow: gift.validationNeeded 
+                                ? '0 4px 12px rgba(255,193,7,0.3)' 
+                                : '0 4px 12px rgba(255,107,107,0.3)'
                             }}
                           >
-                            😱 Mark as Messed Up
+                            {gift.validationNeeded 
+                              ? '❌ Failed Challenge - Return Gift' 
+                              : '😱 Mark as Messed Up'}
                           </button>
                         )}
                       </div>
